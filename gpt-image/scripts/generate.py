@@ -113,7 +113,10 @@ def main():
         sys.exit(1)
 
     from openai import OpenAI
-    client = OpenAI()
+    client_kwargs = {}
+    if os.environ.get("OPENAI_BASE_URL"):
+        client_kwargs["base_url"] = os.environ["OPENAI_BASE_URL"]
+    client = OpenAI(**client_kwargs)
 
     print(f"Generating {args.n} image(s) at {size}, quality={args.quality}, format={args.output_format}...")
 
