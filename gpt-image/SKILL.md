@@ -1,285 +1,180 @@
 ---
 name: gpt-image
-description: Generate and edit images using OpenAI's gpt-image-2 model via CLI scripts. Use this skill whenever the user asks to generate, create, edit, modify, composite, restyle, or transform images using GPT image generation — including requests like "generate an image of...", "create a logo", "make an ad", "edit this photo", "apply style transfer", "put this person in a scene", "translate the text in this image", "make a comic strip", "create a UI mockup", "create an infographic", or any prompt-to-image or image-to-image workflow. Also trigger for requests involving product mockups, virtual try-on, lighting/weather changes, object removal, sketch-to-render, or multi-image compositing. If the user mentions GPT image, gpt-image-2, OpenAI image generation, or DALL-E-style workflows, use this skill. Always use this skill — don't attempt to call the OpenAI image API from memory.
+description: Generate and edit images through APIMart's gpt-image-2 image API using bundled CLI scripts. Use this skill whenever the user asks to generate, create, edit, modify, composite, restyle, or transform images, including logos, ads, UI mockups, infographics, product mockups, virtual try-on, style transfer, object removal, translation, sketch-to-render, lighting changes, and multi-image compositing. Always use these scripts for GPT image work instead of calling the image API from memory.
 ---
 
 # GPT Image Skill
 
-Generate and edit images using OpenAI's `gpt-image-2` model through two CLI scripts.
+Generate and edit images with APIMart's `gpt-image-2` generation endpoint.
+
+The APIMart interface is asynchronous:
+
+1. `POST /v1/images/generations` submits a task.
+2. `GET /v1/tasks/{task_id}` is polled until completion.
+3. Result URLs from `data.result.images[*].url[0]` are downloaded to `--output`.
 
 ## Setup
 
-No install step needed — scripts use PEP 723 inline metadata. `uv run` handles dependency resolution automatically on first invocation.
+No install step is needed. Scripts use PEP 723 inline metadata, and `uv run` executes them directly.
 
-The scripts read `OPENAI_API_KEY` from the environment. Two ways to provide it:
+The scripts read credentials in this order:
 
-1. **Exported in the user's shell** (preferred, and standard for most CLI tools):
-   ```bash
-   export OPENAI_API_KEY=sk-...
-   ```
-   Typically placed in `~/.zshrc` / `~/.bashrc` so it survives across sessions. If it's already set for other OpenAI tools, nothing more to do.
+1. `APIMART_API_KEY` from the shell environment.
+2. `APIMART_API_KEY` from `<SKILL_DIR>/.env`.
+3. `OPENAI_API_KEY` as a backward-compatible fallback.
 
-2. **`.env` file** in the skill root (`<SKILL_DIR>/.env`), as a fallback when the shell export isn't set:
-   ```
-   OPENAI_API_KEY=sk-...
-   ```
+Optional base URL:
 
-An already-exported shell variable takes precedence over `.env`, so both can coexist. If neither is present, the scripts exit with a clear error — remind the user to pick one.
+```bash
+APIMART_BASE_URL=https://api.apimart.ai/v1
+```
 
-## Two Scripts
+## Script Choice
 
-| Script | Purpose | When to use |
-|--------|---------|-------------|
-| `scripts/generate.py` | Text → image (generation) | No input image. Creating from scratch. |
-| `scripts/edit.py` | Text + image(s) → image (editing) | Has 1-10 input images. Modifying, compositing, restyling. |
+| Script | Purpose | Use when |
+| --- | --- | --- |
+| `scripts/generate.py` | Text to image | No input image is provided. |
+| `scripts/edit.py` | Text + reference images to image | The user provides 1-16 local paths, URLs, or image data URIs. |
 
-## Quick Decision
-
-- **User has no images** → `generate.py`
-- **User provides image(s)** → `edit.py`
-- **User wants variants** → add `--n 2` (or 3, 4) to either script
-
-## generate.py — Full Reference
+## generate.py
 
 ```bash
 uv run <SKILL_DIR>/scripts/generate.py \
   --prompt "Your prompt here" \
-  --output /path/to/output.png \
-  --size 1024x1536 \
-  --quality medium \
-  --output-format png \
-  --n 1 \
-  --env-file <SKILL_DIR>/.env
+  --size 2:3 \
+  --resolution 1k \
+  --output /path/to/output.png
 ```
 
-| Flag | Required | Default | Values |
-|------|----------|---------|--------|
-| `--prompt` | Yes | — | The generation prompt |
-| `--output` | No | `output.<format>` | File path for the result |
-| `--size` | No | `1024x1024` | `auto` or any valid WxH (see Size Constraints) |
-| `--quality` | No | `medium` | `low`, `medium`, `high`, `auto` |
-| `--output-format` | No | `png` | `png`, `jpeg`, `webp` |
-| `--output-compression` | No | — | `0`–`100` (only with jpeg/webp) |
-| `--n` | No | `1` | `1`–`4` variants |
-| `--env-file` | No | `../.env` | Path to .env with OPENAI_API_KEY |
+| Flag | Required | Default | Notes |
+| --- | --- | --- | --- |
+| `--prompt` | Yes | - | Generation prompt. |
+| `--output` | No | `output.png` | Saves one image. If the API returns multiple URLs, suffixes `_1`, `_2`, etc. |
+| `--size` | No | `auto` | APIMart ratio value: `auto`, `1:1`, `16:9`, `9:16`, `4:3`, `3:4`, `3:2`, `2:3`, `5:4`, `4:5`, `2:1`, `1:2`, `21:9`, `9:21`. |
+| `--resolution` | No | `1k` | APIMart resolution value: `1k`, `2k`, or `4k`. Old pixel `--size` values infer this automatically. |
+| `--official-fallback` | No | off | Sends `official_fallback: true`. |
+| `--no-wait` | No | off | Submit and print `task_id` without polling/downloading. |
+| `--initial-delay` | No | `12` | Seconds before the first task poll. |
+| `--poll-interval` | No | `4` | Seconds between task polls. |
+| `--timeout` | No | `180` | Max seconds to wait. |
+| `--language` | No | `zh` | Task error language. |
+| `--dry-run` | No | off | Print JSON payload without network calls or API key requirement. |
+| `--env-file` | No | `<SKILL_DIR>/.env` | Alternate env file. |
 
-When `--n` > 1, outputs are saved as `output_1.png`, `output_2.png`, etc.
-
-## edit.py — Full Reference
+## edit.py
 
 ```bash
 uv run <SKILL_DIR>/scripts/edit.py \
   --prompt "Your edit instruction" \
   --images input1.png input2.png \
-  --output /path/to/output.png \
-  --size 1024x1536 \
-  --quality medium \
-  --output-format png \
-  --n 1 \
-  --env-file <SKILL_DIR>/.env
+  --size 2:3 \
+  --resolution 1k \
+  --output /path/to/output.png
 ```
 
-| Flag | Required | Default | Values |
-|------|----------|---------|--------|
-| `--prompt` | Yes | — | The editing instruction |
-| `--images` | Yes | — | 1–10 input image paths |
-| `--output` | No | `output.<format>` | File path for the result |
-| `--size` | No | `1024x1024` | `auto` or any valid WxH (see Size Constraints) |
-| `--quality` | No | `medium` | `low`, `medium`, `high`, `auto` |
-| `--output-format` | No | `png` | `png`, `jpeg`, `webp` |
-| `--output-compression` | No | — | `0`–`100` (only with jpeg/webp) |
-| `--n` | No | `1` | `1`–`4` variants |
-| `--env-file` | No | `../.env` | Path to .env with OPENAI_API_KEY |
+`edit.py` uses the same flags as `generate.py`, plus:
 
-### Multi-image editing
+| Flag | Required | Default | Notes |
+| --- | --- | --- | --- |
+| `--images` | Yes | - | 1-16 local image paths, `http(s)` URLs, or `data:image/...` URIs. Local files are base64 encoded into APIMart `image_urls`. |
 
-Pass multiple `--images` for compositing, style transfer, virtual try-on, etc.
-Reference images by index in your prompt: "Image 1 is the scene, Image 2 is the style reference."
+Reference images by index in prompts: "Image 1 is the scene, Image 2 is the style reference."
 
-## Size Constraints (gpt-image-2)
+## APIMart Compatibility
 
-Both edges must be multiples of 16. Max edge ≤ 3840px. Ratio ≤ 3:1.
-Total pixels: 655,360 – 8,294,400. Above 2K (3,686,400 px) is experimental.
+- `gpt-image-2` only supports `n: 1`; the scripts reject `--n` values other than `1`.
+- The referenced APIMart generation endpoint uses ratio-style `size` plus `resolution` (`1k`, `2k`, `4k`), not OpenAI pixel dimensions. Common old pixel sizes are mapped to both fields when exact; unsupported pixel sizes fail with a clear error.
+- APIMart `4k` output is accepted only with `16:9`, `9:16`, `2:1`, `1:2`, `21:9`, and `9:21`; the scripts reject invalid 4K ratio combinations before calling the API.
+- The APIMart `gpt-image-2` generation endpoint does not expose `quality`, `output_format`, `output_compression`, transparency, or `input_fidelity`; the scripts reject old flags instead of silently ignoring them.
+- Result files are downloaded from APIMart result URLs. The URL content determines the actual image bytes; use the `--output` extension you want for local naming.
 
-Pass `--size auto` to let the model pick.
+## Prompting
 
-Common sizes:
+Before writing a prompt, read `references/prompting-guide.md`.
 
-| Use case | Size |
-|----------|------|
-| Square (default) | `1024x1024` |
-| Portrait | `1024x1536` |
-| Landscape | `1536x1024` |
-| Widescreen / slide | `1536x864` |
-| 2K / QHD | `2560x1440` |
-| 4K landscape | `3840x2160` |
-| 4K portrait | `2160x3840` |
+Prompt principles:
 
-The scripts validate size automatically and print a warning above 2K.
+1. Structure: scene/background, subject, key details, constraints.
+2. Be specific: materials, textures, visual medium, lighting, framing.
+3. For edits, state both what changes and what must remain unchanged.
+4. Quote literal text and specify typography/placement.
+5. For multi-image edits, identify each image by index and role.
 
-## Quality Guide
-
-| Setting | When to use |
-|---------|-------------|
-| `low` | Speed-critical, high-volume batches, previews, experimentation |
-| `medium` | Default for most production work — good balance of quality and speed |
-| `high` | Small or dense text, detailed infographics, close-up portraits, identity-sensitive edits |
-| `auto` | Let the model pick based on the prompt |
-
-## Output Format
-
-`gpt-image-2` returns PNG by default. Pass `--output-format jpeg` or `--output-format webp` for smaller files and faster generation. For lossy formats, add `--output-compression 0-100` to control quality/size tradeoff.
-
-**Note:** `gpt-image-2` does **not** support transparent backgrounds. If you need alpha transparency, run a downstream background-removal step on an opaque PNG output.
-
-## Prompting — Read Before Writing Any Prompt
-
-Before crafting a prompt, read `references/prompting-guide.md` for detailed patterns.
-
-Key principles in brief:
-
-1. **Structure**: background/scene → subject → key details → constraints. Include intended use.
-2. **Be specific**: name materials, textures, visual medium. Add "photorealistic" for photo outputs.
-3. **Composition**: specify framing, angle, lighting, layout placement.
-4. **People**: describe scale, body framing, gaze, object interactions.
-5. **Constraints**: state exclusions ("no watermark") and invariants ("preserve identity").
-6. **Text in images**: put literal text in quotes, specify typography, use `high` quality for dense text.
-7. **Multi-image**: reference by index + description, explain how images interact.
-8. **Iterate**: start clean, refine with small single-change follow-ups.
-
-## Workflow Patterns
+## Workflow Examples
 
 ### Generate: Infographic
+
 ```bash
 uv run <SKILL_DIR>/scripts/generate.py \
   --prompt "Create a detailed infographic about [topic]. Include [data points]. Clean layout, clear labels, readable text. White background." \
-  --size 1024x1536 --quality high \
+  --size 2:3 \
+  --resolution 2k \
   --output infographic.png
 ```
 
-### Generate: Photorealistic image
+### Generate: Photorealistic Image
+
 ```bash
 uv run <SKILL_DIR>/scripts/generate.py \
   --prompt "Create a photorealistic photograph of [subject]. [Camera/lens details]. [Lighting]. Natural texture, no retouching." \
-  --size 1024x1536 --quality medium \
+  --size 2:3 \
+  --resolution 1k \
   --output photo.png
 ```
 
-### Generate: Logo (multiple variants)
+### Generate: Logo
+
 ```bash
 uv run <SKILL_DIR>/scripts/generate.py \
   --prompt "Create an original logo for [brand]. [Brand personality]. Clean vector-like shapes, strong silhouette, flat design, plain background. No watermark." \
-  --size 1024x1024 --quality medium --n 4 \
+  --size 1:1 \
+  --resolution 1k \
   --output logo.png
 ```
 
-### Generate: Ad creative
-```bash
-uv run <SKILL_DIR>/scripts/generate.py \
-  --prompt "Create a polished ad for [brand]. [Audience + vibe]. Tagline: \"EXACT TEXT HERE\". Clean composition, legible typography. No extra text, no watermarks." \
-  --size 1024x1536 --quality medium \
-  --output ad.png
-```
+### Edit: Product Mockup
 
-### Generate: UI mockup
-```bash
-uv run <SKILL_DIR>/scripts/generate.py \
-  --prompt "Create a realistic mobile app UI mockup for [app concept]. [Layout details]. Clean typography, minimal decoration. Place in an iPhone frame." \
-  --size 1024x1536 --quality medium \
-  --output mockup.png
-```
-
-### Generate: Comic strip
-```bash
-uv run <SKILL_DIR>/scripts/generate.py \
-  --prompt "Create a vertical comic strip with 4 panels. Panel 1: [scene]. Panel 2: [scene]. Panel 3: [scene]. Panel 4: [scene]." \
-  --size 1024x1536 --quality medium \
-  --output comic.png
-```
-
-### Edit: Style transfer
 ```bash
 uv run <SKILL_DIR>/scripts/edit.py \
-  --prompt "Use the same style from the input image and generate [new subject]. Keep the same [style cues]. White background." \
-  --images style_reference.png \
-  --size 1024x1536 --quality medium \
-  --output styled.png
-```
-
-### Edit: Product mockup / clean background
-```bash
-uv run <SKILL_DIR>/scripts/edit.py \
-  --prompt "Extract the product, place on plain white background. Preserve product geometry and label legibility. Add subtle contact shadow. Do not restyle." \
+  --prompt "Extract the product, place it on a plain white opaque background. Preserve product geometry and label legibility. Add subtle contact shadow. Do not restyle." \
   --images product_photo.png \
-  --size 1024x1536 --quality medium \
+  --size 2:3 \
+  --resolution 1k \
   --output mockup.png
 ```
 
-### Edit: Virtual try-on
+### Edit: Virtual Try-On
+
 ```bash
 uv run <SKILL_DIR>/scripts/edit.py \
   --prompt "Dress the person using the provided clothing images. Do not change face, body shape, pose, or identity. Replace only clothing with realistic fit. Match lighting and shadows." \
   --images person.png top.png jacket.png shoes.png \
-  --size 1024x1536 --quality medium \
+  --size 2:3 \
+  --resolution 1k \
   --output tryon.png
 ```
 
-### Edit: Object removal
-```bash
-uv run <SKILL_DIR>/scripts/edit.py \
-  --prompt "Remove [object] from the image. Do not change anything else." \
-  --images input.png \
-  --size 1024x1536 --quality medium \
-  --output cleaned.png
-```
+### Edit: Scene Compositing
 
-### Edit: Scene compositing (multi-image)
 ```bash
 uv run <SKILL_DIR>/scripts/edit.py \
-  --prompt "Place the [element] from Image 2 into Image 1, next to [anchor]. Match lighting, perspective, scale, and shadows. Do not change anything else." \
+  --prompt "Place the element from Image 2 into Image 1 next to [anchor]. Match lighting, perspective, scale, and shadows. Do not change anything else." \
   --images scene.png element.png \
-  --size 1024x1536 --quality medium \
+  --size 2:3 \
+  --resolution 1k \
   --output composite.png
-```
-
-### Edit: Translation
-```bash
-uv run <SKILL_DIR>/scripts/edit.py \
-  --prompt "Translate all text in the image to [language]. Do not change any other aspect of the image." \
-  --images original.png \
-  --size 1024x1536 --quality medium \
-  --output translated.png
-```
-
-### Edit: Lighting / weather change
-```bash
-uv run <SKILL_DIR>/scripts/edit.py \
-  --prompt "Make it look like [weather/time]. Preserve all objects, camera angle, and composition." \
-  --images original.png \
-  --size 1024x1536 --quality medium \
-  --output transformed.png
-```
-
-### Edit: Sketch to photorealistic render
-```bash
-uv run <SKILL_DIR>/scripts/edit.py \
-  --prompt "Turn this drawing into a photorealistic image. Preserve exact layout, proportions, and perspective. Choose realistic materials and lighting. Do not add new elements or text." \
-  --images sketch.png \
-  --size 1024x1536 --quality medium \
-  --output render.png
 ```
 
 ## Error Handling
 
 The scripts validate:
-- `.env` exists and contains `OPENAI_API_KEY`
-- Size meets all gpt-image-2 constraints (multiples of 16, ratio, pixel count)
-- `--output-compression` only used with jpeg/webp and in range 0-100
-- Input images exist (edit mode)
-- Image count ≤ 10 (edit mode)
 
-If something fails, read the error message — it explains what constraint was violated.
+- API key presence for real calls.
+- APIMart-compatible `size`.
+- APIMart-compatible `resolution`.
+- Unsupported legacy OpenAI flags.
+- `--n 1`.
+- Input image existence and image count for edit mode.
+- Task status and APIMart error payloads.
 
-## Output
-
-Save generated images to the path specified by `--output`, defaulting to the current working directory. After saving, surface the file path(s) to the user so they can open or preview them. If the user supplied input images for an edit, use the exact paths they provided — don't move or copy them.
+After saving, surface the output path(s) to the user. If the user supplied input images, use the exact paths they provided; do not move or copy them.

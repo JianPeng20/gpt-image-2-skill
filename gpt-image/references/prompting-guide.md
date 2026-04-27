@@ -57,7 +57,7 @@ For edits, use **"change only X" + "keep everything else the same"** and repeat 
 - Put literal text in **quotes** or **ALL CAPS**
 - Specify typography: font style, size, colour, placement
 - For tricky words/brand names, spell letter-by-letter
-- Use `medium` or `high` quality for small text, dense panels, multi-font layouts
+- For small text, dense panels, or multi-font layouts, simplify the composition and make typography requirements explicit
 
 ## Multi-Image Inputs (Edit Mode)
 
@@ -81,7 +81,7 @@ Re-specify critical details if they start to drift.
 
 ### Infographics
 Explain structured information for a specific audience. Include data hierarchy, labels, and layout.
-Use `quality=high` for dense text or detailed diagrams.
+For dense text or detailed diagrams, use a larger aspect ratio and simplify visual hierarchy.
 
 ### Photorealism
 Prompt as if capturing a real photo. Use photography language (lens, lighting, framing).
@@ -108,7 +108,7 @@ Require realistic fit (draping, folds, occlusion) plus consistent lighting/shado
 Preserve product geometry and label legibility. Add only light polishing and contact shadow.
 
 ### Object Removal (Edit)
-"Remove X. Do not change anything else." Use `input_fidelity=high` when identity matters.
+"Remove X. Do not change anything else." Restate identity, layout, and geometry preservation when they matter.
 
 ### Scene Compositing (Edit)
 Clearly specify what to transplant, where it goes, and what must remain unchanged.
@@ -121,21 +121,16 @@ Change only environmental conditions. Preserve identity, geometry, camera angle,
 
 ## Size Quick Reference
 
-| Label | Resolution | Notes |
-|-------|-----------|-------|
-| HD portrait | 1024x1536 | Standard portrait |
-| HD landscape | 1536x1024 | Standard landscape |
-| Square | 1024x1024 | General-purpose default |
-| 2K / QHD | 2560x1440 | Upper reliability boundary |
-| Near-4K | 3824x2144 | Experimental upper end |
+| Label | Size value | Typical resolution | Notes |
+|-------|------------|--------------------|-------|
+| Portrait | `2:3` | `1k` or `2k` | Standard portrait |
+| Landscape | `3:2` | `1k` or `2k` | Standard landscape |
+| Square | `1:1` | `1k` or `2k` | General-purpose |
+| Widescreen | `16:9` | `1k`, `2k`, or `4k` | Slides, banners, desktop mockups |
+| Vertical social | `9:16` | `1k`, `2k`, or `4k` | Stories, reels, phone mockups |
+| Ultra-wide | `21:9` | `1k`, `2k`, or `4k` | Cinematic banners |
 
-**Constraints**: both edges multiple of 16, max edge < 3840px, ratio ≤ 3:1,
-total pixels between 655,360 and 8,294,400.
+APIMart `gpt-image-2` accepts ratio-style `size` values: `auto`, `1:1`, `16:9`,
+`9:16`, `4:3`, `3:4`, `3:2`, `2:3`, `5:4`, `4:5`, `2:1`, `1:2`, `21:9`, `9:21`.
 
-## Quality Guide
-
-| Setting | When to use |
-|---------|-------------|
-| `low` | Speed/cost-sensitive, high-volume, experimentation, previews |
-| `medium` | Default for most production work |
-| `high` | Small/dense text, detailed infographics, close-up portraits, identity-sensitive edits, high-res |
+Use `--resolution 1k` for most drafts, `--resolution 2k` for dense typography or final assets, and `--resolution 4k` only with APIMart-supported wide/tall ratios: `16:9`, `9:16`, `2:1`, `1:2`, `21:9`, `9:21`.
